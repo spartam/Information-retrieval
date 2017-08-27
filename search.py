@@ -4,6 +4,7 @@ import numpy as np
 import heapq, itertools
 from stemming.porter2 import stem
 from PyDictionary import PyDictionary
+from scipy import spatial
 
 def near(w1, w2, proximity, directory='lookup'):
 	w1 = Word(w1, directory)
@@ -46,7 +47,6 @@ def grouped_near(*words, proximity=None, directory='lookup'):
 	proximity = proximity if proximity is not None else len(words)
 
 	if (len(words) == 1):
-		words
 		if '*' in words[0]:
 			words = word_with_star(words[0])
 			if len(words) == 0:
@@ -72,6 +72,7 @@ def grouped_near(*words, proximity=None, directory='lookup'):
 				words = [stem(w) for w in words]
 			w1 = words.pop(0)
 			w2 = words.pop(0)
+
 			solutions = near(w1, w2, proximity, directory=directory)
 
 			for W in [Word(w, directory) for w in words]:
@@ -81,6 +82,19 @@ def grouped_near(*words, proximity=None, directory='lookup'):
 					if not(occurences):
 						pop.append(document)
 						continue
+					else:
+						occurences = occurences[1]
+						matches = solutions[document]
+						new = []
+						for indx in occurences:
+							for match in matches:
+								if abs(max(match) - indx) < proximity and abs(min(match) - indx) < proximity:
+									new.append(tuple(list(match)+ [indx]))
+						if len(new) == 0:
+							pop.append(document)
+						else:
+							solutions[document] = new
+
 
 				for p in pop:
 					solutions.pop(p)
@@ -117,38 +131,73 @@ def star(prefix=None, suffix=None):
 		return btreeInstance.prefixed(prefix).intersection(set(map(lambda x : x[::-1], btreeReverseInstance.prefixed(suffix[::-1]))))
 
 
-def ranked(*words, directory='lookup'):
+def ranked(*words, directory='lookup', func=lambda *x: 1):
+	if directory == 'stemming':
+		words = list(map(lambda x : stem(x), words))
+
+	query = []
+	processed = []
+	for w in words:
+		if w in processed:
+			continue
+		query.append(words.count(w))
+		processed.append(w)
+
+	query = np.array(list(map(lambda x : x / sum(query), query)))
+
 	documents = set()
-	query = np.array([1/len(words) for i in range(len(words))])
+	# query = np.array([1/len(words) for i in range(len(words))])
 	heap = []
 
 	Words = []
-	for word in words:
+	DFt = []
+	for word in processed:
 		WordInstance = Word(word, directory)
 		Words.append(WordInstance)
 		documents = documents.union(WordInstance.documents())
+		DFt.append(len(WordInstance.documents()))
+
+	N = len(documents)
+	iDFt = list(map(lambda X : np.log10(N/X), DFt))
 
 	for document in documents:
 		vector = []
-		total_count = 0
 		for WordInstance in Words:
+			## calculate the TF(t,d)
 			count = WordInstance.count(document)
-			vector.append(count)
-			total_count += count
-		vector = np.array(list(map(lambda x : x / total_count, vector)))
+			if count > 0:
+				vector.append(1 + np.log10(count))
+			else:
+				vector.append(0)
 
-		score = np.linalg.norm(query-vector)
+		## tf-idf weighting
+		for i in range(len(iDFt)):
+			vector[i] = vector[i] * iDFt[i]
+		
+		vector = np.array(vector)
+
+		score = func(query, vector)
 
 		heapq.heappush(heap, (score, document))
 
 	return heap
 	
+
+def euclidean(v1, v2):
+	return np.linalg.norm(v1-v2)
+
+def cosine(v1, v2):
+	return 1 - spatial.distance.cosine(v1, v2)
+
 def synonyms(word):
 	dictionary=PyDictionary()
 	return dictionary.synonym(word)
 
+
+
 # print(grouped_near("financial", "crisis", proximity=9, directory='stemming'))
-# print(near("asian", "crisis", 9))
+# print(near("gaming", "art", proximity=9))
+# print(grouped_near("gaming", "art", proximity=9))
 # print(grouped_near("financial", "crisis"))
 
 # print(word_with_star('lov*e'))
@@ -156,4 +205,9 @@ def synonyms(word):
 # print(grouped_near('lov*e', 'aff*', 'nation', proximity=100))
 # print(grouped_near('lovable'))
 # print(star(prefix="te", suffix="t"))
+# res = ranked('test', 'paper', 'print', 'biography', 'print', '0')
+# res2 = ranked('test', 'paper', 'print', 'biography', 'print', '0', func=cosine)
+# print([x[1] for x in heapq.nlargest(5, res)], '\t', [x[1] for x in heapq.nlargest(5, res2)])
 # res = ranked('test', 'paper', 'print', 'biography', '0')
+# res2 = ranked('test', 'paper', 'print', 'biography', '0', func=cosine)
+# print([x[1] for x in heapq.nlargest(5, res)], '\t', [x[1] for x in heapq.nlargest(5, res2)])
