@@ -83,7 +83,6 @@ class Word:
 					end = middle
 				else:
 					start = middle
-		print(self.occurence[start])
 		if self.occurences[start] == documentID:
 			return self.occurences[start]
 		else:
@@ -94,5 +93,6 @@ class Word:
 
 if __name__ == '__main__':
 	w = Word("test", 'lookup')
-	for d in w.documents():
-		print('%s:\t%s' % (d, w.count(d)))
+	print(w.search(995))
+	# for d in w.documents():
+	# 	print('%s:\t%s' % (d, w.count(d)))

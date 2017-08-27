@@ -86,7 +86,6 @@ class FileController:
 if __name__ == '__main__':
 		
 	FC = FileController()
-	print(FC.get(7103))
 
 	# print(FC.get(683))
 	# print(FC.get(707))

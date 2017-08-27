@@ -1,7 +1,10 @@
 import search
-import itertools, re
+import itertools, re, heapq
 
 def process(query, directory='lookup'):
+	if is_ranked(query):
+		return ranked_search(query, directory=directory)
+
 	query = expand(query) if expandable(query) else query
 	query = query.lower()
 
@@ -28,9 +31,9 @@ def process(query, directory='lookup'):
 				solutions = None
 				for i in range(len(counts)):
 					if solutions is None:
-						solutions = search.grouped_near(words[i], words[i+1], directory=directory)
+						solutions = search.grouped_near(words[i], words[i+1], proximity=counts[i], directory=directory)
 					else:
-						solutions = solutions.union(search.grouped_near(words[i], words[i+1], directory=directory))
+						solutions = solutions.union(search.grouped_near(words[i], words[i+1], proximity=counts[i], directory=directory))
 				
 			else:
 				raise Exception('Wrongly formatted query')
@@ -75,13 +78,23 @@ def process(query, directory='lookup'):
 			raise Exception('Unknown operator: %s' % (operator))
 
 
-
-
 	return solutions
 
 
 def expandable(strng):
 	return len(re.findall('E\([a-z]*\)', strng)) > 0
+
+def is_ranked(strng):
+	return len(re.findall('^R[S]{0,1}:[0-9]*\(.*\)$', strng)) > 0
+
+def ranked_search(strng, directory='lookup'):
+	k = int(strng[strng.find(':') +1: strng.find('(')])
+	words = strng[strng.find('(') +1 : strng.find(')')].split()
+	func = search.cosine if strng[:2] == 'RS' else search.euclidean
+
+	heap = search.ranked(*words, directory=directory, func=func)
+	return set([x[1] for x in heapq.nlargest(k, heap)])
+
 
 
 def expand(strng):
@@ -93,34 +106,5 @@ def expand(strng):
 	for combination in itertools.product(*sets):
 		result += ' || (' + strng % combination + ')'
 
+	print(result.strip(' ||'))
 	return result.strip(' ||')
-
-
-if __name__ == '__main__':
-	# pass
-	# print(process('CURRENCY'))
-	# print()
-	# print(process('CURRENCY', directory='stemming'))
-	# expand('(failure) && (success)')
-	# print(expand('(failure) && (success)'))
-	print(process('(E(failure)) && (success)'))
-	# print(process('((failure) && (success))'))
-	# print(expand('E(test) && E(repetition)'))
-	# print(process('financial \\9 crisis \\9 asian'))
-	# print()
-	# print(process('(financial \\9 crisis) && (crisis \\9 asian)'))
-	# print()
-	# print(process('financial crisis asian \\9'))
-	# print()
-	# print('----')
-	# print()
-	# print(process('financial \\9 crisis \\9 asian', directory='stemming'))
-	# print()
-	# print(process('(financial \\9 crisis) && (crisis \\9 asian)', directory='stemming'))
-	# print()
-	# print(process('financial crisis asian \\9', directory='stemming'))
-	# print()
-	# print(process('''(financial \\2 crisis \\7 asian) && (currency)'''))
-	# print()
-	# print(process('''(financial \\2 crisis \\7 asian) || (currency)'''))
-	# print(type(set()) is set)
